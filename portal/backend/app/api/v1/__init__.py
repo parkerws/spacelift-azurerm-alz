@@ -9,6 +9,7 @@ from app.api.v1.endpoints import (
     costs,
     deployments,
     auth,
+    designer,
 )
 
 api_router = APIRouter()
@@ -24,3 +25,4 @@ api_router.include_router(costs.router, prefix="/costs", tags=["Cost Management"
 api_router.include_router(
     deployments.router, prefix="/deployments", tags=["Deployments"]
 )
+api_router.include_router(designer.router, prefix="/designer", tags=["Visual Designer"])
