@@ -19,11 +19,10 @@ docker-compose -f docker-compose.full.yml up -d
 ```
 
 This will start:
-- PostgreSQL database
-- Redis cache
+- PostgreSQL database (port 5432)
+- Redis cache (port 6379)
 - FastAPI backend (port 8000)
 - React frontend (port 3000)
-- Celery worker
 
 ### 2. Wait for services to be ready
 
@@ -107,17 +106,44 @@ docker-compose -f docker-compose.full.yml down -v
 
 ## Troubleshooting
 
+**Build errors or "unable to get image" error:**
+If you get build errors, try building explicitly first:
+```bash
+docker-compose -f docker-compose.full.yml build
+docker-compose -f docker-compose.full.yml up -d
+```
+
 **Backend won't start:**
 - Check PostgreSQL is healthy: `docker-compose -f docker-compose.full.yml ps postgres`
 - View logs: `docker-compose -f docker-compose.full.yml logs backend`
+- Ensure ports 8000, 5432, 6379 are not in use
 
 **Frontend shows connection error:**
-- Ensure backend is running on port 8000
-- Check CORS configuration in backend/.env
+- Ensure backend is running: `curl http://localhost:8000/health`
+- Check backend logs for errors
+- Verify CORS configuration allows localhost:3000
 
 **Database connection error:**
 - Wait for PostgreSQL to be fully ready (30 seconds)
+- Check if database is accessible: `docker-compose -f docker-compose.full.yml exec postgres psql -U postgres -c '\l'`
 - Restart backend: `docker-compose -f docker-compose.full.yml restart backend`
+
+**Port conflicts:**
+If ports are already in use, modify the port mappings in docker-compose.full.yml:
+```yaml
+ports:
+  - "3001:80"  # Change 3000 to 3001
+  - "8001:8000"  # Change 8000 to 8001
+```
+
+**Complete reset:**
+If something goes wrong, reset everything:
+```bash
+docker-compose -f docker-compose.full.yml down -v
+docker-compose -f docker-compose.full.yml build --no-cache
+docker-compose -f docker-compose.full.yml up -d
+docker-compose -f docker-compose.full.yml exec backend python -m app.db.init_db
+```
 
 ## Production Deployment
 
