@@ -1,0 +1,57 @@
+version: "1"
+
+# Module metadata
+module:
+  name: azure-firewall
+  description: "Azure Firewall module with multi-public-IP, Premium SKU, forced tunneling, and DNS proxy support"
+  provider: azurerm
+  category: hub-networking
+
+# Automated tests
+tests:
+  - name: basic-validation
+    description: "Validate basic Azure Firewall configuration"
+    command: |
+      cd examples/basic
+      terraform init
+      terraform validate
+      terraform fmt -check
+
+  - name: basic-plan
+    description: "Test basic Azure Firewall with single public IP"
+    command: |
+      cd examples/basic
+      terraform init
+      terraform plan -out=tfplan
+
+  - name: advanced-validation
+    description: "Validate advanced firewall configurations"
+    command: |
+      cd examples/advanced
+      terraform init
+      terraform validate
+      terraform fmt -check
+
+  - name: advanced-plan
+    description: "Test Premium firewall with multi-IP, forced tunneling, and explicit IP configs"
+    command: |
+      cd examples/advanced
+      terraform init
+      terraform plan -out=tfplan
+
+# Spacelift stack defaults
+stack_defaults:
+  runner_image: public.ecr.aws/spacelift/runner-terraform:latest
+  terraform_version: "1.9.0"
+
+# Auto-attach policies
+policies:
+  plan:
+    - network-security
+    - firewall-policy-validation
+    - cost-control
+
+# Notification settings
+notifications:
+  on_failure: true
+  on_success: false

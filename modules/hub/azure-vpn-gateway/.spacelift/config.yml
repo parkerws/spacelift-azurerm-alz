@@ -1,0 +1,52 @@
+version: "1"
+
+module:
+  name: azure-vpn-gateway
+  description: "Azure VPN Gateway module with site-to-site, point-to-site, BGP, and active-active support"
+  provider: azurerm
+  category: hub-networking
+
+tests:
+  - name: basic-validation
+    description: "Validate basic VPN Gateway configuration"
+    command: |
+      cd examples/basic
+      terraform init
+      terraform validate
+      terraform fmt -check
+
+  - name: basic-plan
+    description: "Test basic VPN Gateway deployment"
+    command: |
+      cd examples/basic
+      terraform init
+      terraform plan -out=tfplan
+
+  - name: advanced-validation
+    description: "Validate advanced VPN Gateway configurations"
+    command: |
+      cd examples/advanced
+      terraform init
+      terraform validate
+      terraform fmt -check
+
+  - name: advanced-plan
+    description: "Test active-active, P2S, Azure AD auth, and high-performance configurations"
+    command: |
+      cd examples/advanced
+      terraform init
+      terraform plan -out=tfplan
+
+stack_defaults:
+  runner_image: public.ecr.aws/spacelift/runner-terraform:latest
+  terraform_version: "1.9.0"
+
+policies:
+  plan:
+    - network-security
+    - vpn-gateway-validation
+    - cost-control
+
+notifications:
+  on_failure: true
+  on_success: false
