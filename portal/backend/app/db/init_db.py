@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.database import Base, engine
 from app.models.user import User, UserRole
 from app.models.landing_zone import LandingZone
+from app.models.designer import Project, ComponentTemplate
 from app.core.auth import get_password_hash
 
 logger = logging.getLogger(__name__)
