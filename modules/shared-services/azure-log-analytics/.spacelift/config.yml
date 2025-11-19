@@ -1,0 +1,37 @@
+version: "1"
+
+module:
+  name: azure-log-analytics
+  description: "Azure Log Analytics Workspace module for centralized logging and monitoring"
+  provider: azurerm
+  category: shared-services
+
+tests:
+  - name: basic-validation
+    description: "Validate basic Log Analytics configuration"
+    command: |
+      cd examples/basic
+      terraform init
+      terraform validate
+      terraform fmt -check
+
+  - name: advanced-validation
+    description: "Validate advanced configuration with solutions"
+    command: |
+      cd examples/advanced
+      terraform init
+      terraform validate
+      terraform fmt -check
+
+stack_defaults:
+  runner_image: public.ecr.aws/spacelift/runner-terraform:latest
+  terraform_version: "1.9.0"
+
+policies:
+  plan:
+    - cost-control
+    - retention-validation
+
+notifications:
+  on_failure: true
+  on_success: false
