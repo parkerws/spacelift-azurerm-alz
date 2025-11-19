@@ -1,0 +1,6 @@
+version: "1"
+module:
+  name: azure-management-group
+  description: "Azure Management Group for subscription organization"
+  provider: azurerm
+  category: management

@@ -1,0 +1,6 @@
+version: "1"
+module:
+  name: azure-storage-account
+  description: "Azure Storage Account with blob, file, queue, and table support"
+  provider: azurerm
+  category: shared-services

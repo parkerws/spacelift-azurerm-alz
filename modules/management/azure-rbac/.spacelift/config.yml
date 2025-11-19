@@ -1,0 +1,6 @@
+version: "1"
+module:
+  name: azure-rbac
+  description: "Azure RBAC role assignments for access control"
+  provider: azurerm
+  category: management

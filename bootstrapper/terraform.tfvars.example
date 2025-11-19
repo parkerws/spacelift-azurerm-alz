@@ -1,0 +1,77 @@
+# Azure Landing Zone Factory - Bootstrapper Configuration Example
+# Copy this file to terraform.tfvars and update with your values
+
+# Organization configuration
+organization_name = "contoso"
+
+# Azure authentication
+azure_tenant_id       = "00000000-0000-0000-0000-000000000000"
+azure_subscription_id = "00000000-0000-0000-0000-000000000000"
+
+# VCS configuration
+github_repository = "contoso/azure-landing-zones"
+vcs_provider      = "github" # Options: github, gitlab, bitbucket
+
+# Service principal creation
+create_service_principals = true
+
+# Optional: Customize service principal names
+# service_principal_names = {
+#   platform       = "sp-spacelift-platform"
+#   connectivity   = "sp-spacelift-connectivity"
+#   identity       = "sp-spacelift-identity"
+#   management     = "sp-spacelift-management"
+#   landing_zones  = "sp-spacelift-landing-zones"
+# }
+
+# Optional: Azure environment (for sovereign clouds)
+# azure_environment = "public" # Options: public, usgovernment, china
+
+# Optional: Custom space hierarchy
+# spacelift_spaces = {
+#   platform = {
+#     name        = "Platform"
+#     description = "Platform services and infrastructure"
+#     parent_id   = "root"
+#   }
+#   connectivity = {
+#     name        = "Connectivity"
+#     description = "Hub networking and connectivity resources"
+#     parent_id   = "platform"
+#   }
+#   identity = {
+#     name        = "Identity"
+#     description = "Identity and access management resources"
+#     parent_id   = "platform"
+#   }
+#   management = {
+#     name        = "Management"
+#     description = "Management and monitoring resources"
+#     parent_id   = "platform"
+#   }
+#   landing_zones = {
+#     name        = "Landing Zones"
+#     description = "Application landing zones"
+#     parent_id   = "root"
+#   }
+#   corp = {
+#     name        = "Corp"
+#     description = "Corporate landing zones with on-premises connectivity"
+#     parent_id   = "landing_zones"
+#   }
+#   online = {
+#     name        = "Online"
+#     description = "Online landing zones for internet-facing workloads"
+#     parent_id   = "landing_zones"
+#   }
+# }
+
+# Optional: Spacelift worker pool (for private workers)
+# worker_pool_id = "01234567-89ab-cdef-0123-456789abcdef"
+
+# Optional: Resource tags
+# tags = {
+#   ManagedBy   = "Spacelift"
+#   Purpose     = "Landing-Zone-Factory"
+#   Environment = "Production"
+# }

@@ -1,0 +1,224 @@
+# Spacelift Stack Factory Configuration
+# This file defines the hub and spoke stacks to be created
+
+# Hub Stacks (Connectivity/Platform)
+hubs:
+  - name: hub-connectivity-prod
+    space: connectivity
+    environment: production
+    location: eastus
+    description: "Production hub network with full connectivity services"
+    address_space: ["10.0.0.0/16"]
+
+    # Firewall configuration
+    firewall:
+      sku_name: AZFW_VNet
+      sku_tier: Standard
+      public_ip_count: 2
+      dns_proxy_enabled: true
+
+    # VPN Gateway configuration
+    vpn_gateway:
+      type: Vpn
+      sku: VpnGw2
+      enable_bgp: true
+      active_active: true
+
+    # Bastion configuration
+    bastion:
+      sku: Standard
+      file_copy_enabled: true
+      ip_connect_enabled: true
+
+    labels:
+      - production
+      - hub
+      - connectivity
+      - eastus
+
+  - name: hub-connectivity-dev
+    space: connectivity
+    environment: development
+    location: eastus2
+    description: "Development hub network with basic connectivity"
+    address_space: ["10.100.0.0/16"]
+
+    firewall:
+      sku_name: AZFW_VNet
+      sku_tier: Standard
+      public_ip_count: 1
+
+    vpn_gateway:
+      type: Vpn
+      sku: VpnGw1
+      enable_bgp: false
+      active_active: false
+
+    bastion:
+      sku: Basic
+
+    labels:
+      - development
+      - hub
+      - connectivity
+      - eastus2
+
+# Spoke Stacks (Landing Zones)
+spokes:
+  # Corporate Landing Zones
+  - name: spoke-corp-prod-001
+    space: corp
+    environment: production
+    location: eastus
+    description: "Corporate workload landing zone - Production 001"
+    hub: hub-connectivity-prod
+    address_space: ["10.1.0.0/16"]
+
+    subnets:
+      - name: snet-workload
+        address_prefix: "10.1.0.0/24"
+        service_endpoints:
+          - Microsoft.KeyVault
+          - Microsoft.Storage
+          - Microsoft.Sql
+
+      - name: snet-data
+        address_prefix: "10.1.1.0/24"
+        service_endpoints:
+          - Microsoft.Sql
+          - Microsoft.Storage
+
+      - name: snet-integration
+        address_prefix: "10.1.2.0/24"
+        delegation:
+          name: Microsoft.Web/serverFarms
+
+    # Route all traffic through hub firewall
+    route_to_hub: true
+
+    # Enable private endpoints
+    private_endpoints: true
+
+    labels:
+      - production
+      - spoke
+      - corp
+      - eastus
+
+  - name: spoke-corp-prod-002
+    space: corp
+    environment: production
+    location: eastus
+    description: "Corporate workload landing zone - Production 002"
+    hub: hub-connectivity-prod
+    address_space: ["10.2.0.0/16"]
+
+    subnets:
+      - name: snet-workload
+        address_prefix: "10.2.0.0/24"
+        service_endpoints:
+          - Microsoft.KeyVault
+          - Microsoft.Storage
+
+    route_to_hub: true
+    private_endpoints: true
+
+    labels:
+      - production
+      - spoke
+      - corp
+      - eastus
+
+  # Online Landing Zones
+  - name: spoke-online-prod-001
+    space: online
+    environment: production
+    location: eastus
+    description: "Online workload landing zone - Production 001"
+    hub: hub-connectivity-prod
+    address_space: ["10.10.0.0/16"]
+
+    subnets:
+      - name: snet-web
+        address_prefix: "10.10.0.0/24"
+        service_endpoints:
+          - Microsoft.KeyVault
+          - Microsoft.Storage
+
+      - name: snet-app
+        address_prefix: "10.10.1.0/24"
+        delegation:
+          name: Microsoft.Web/serverFarms
+
+      - name: snet-data
+        address_prefix: "10.10.2.0/24"
+        service_endpoints:
+          - Microsoft.Sql
+
+    route_to_hub: true
+    private_endpoints: true
+
+    labels:
+      - production
+      - spoke
+      - online
+      - eastus
+
+  - name: spoke-online-dev-001
+    space: online
+    environment: development
+    location: eastus2
+    description: "Online workload landing zone - Development 001"
+    hub: hub-connectivity-dev
+    address_space: ["10.110.0.0/16"]
+
+    subnets:
+      - name: snet-web
+        address_prefix: "10.110.0.0/24"
+
+      - name: snet-app
+        address_prefix: "10.110.1.0/24"
+
+    route_to_hub: true
+    private_endpoints: false
+
+    labels:
+      - development
+      - spoke
+      - online
+      - eastus2
+
+# Optional: Hub-to-Hub Peering (for multi-region)
+hub_peering:
+  - source: hub-connectivity-prod
+    destination: hub-connectivity-secondary
+    allow_forwarded_traffic: true
+    allow_gateway_transit: true
+    use_remote_gateways: false
+
+# Stack defaults
+defaults:
+  terraform_version: "1.8.0"
+  auto_deploy: false
+  enable_local_preview: true
+  administrative: false
+
+  # Context attachments (by environment)
+  contexts:
+    production:
+      - azure-sp-platform
+      - azure-environment
+    development:
+      - azure-sp-dev
+      - azure-environment
+
+  # Policy attachments (by environment)
+  policies:
+    production:
+      - production-approval
+      - cost-estimation
+      - require-tags
+      - prevent-public-exposure
+    development:
+      - cost-estimation
+      - require-tags

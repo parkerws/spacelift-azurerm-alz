@@ -1,202 +1,241 @@
-# Spacelift Environment Bootstrapper
+# Azure Landing Zone Factory - Bootstrapper
 
-Bootstrap your Spacelift environment for Azure landing zones.
+This bootstrapper sets up the foundational Spacelift infrastructure required for the Azure Landing Zone Factory.
 
-## Purpose
+## What It Creates
 
-This bootstrapper sets up:
-1. **Spacelift Spaces**: Hierarchical organization structure
-2. **Azure Service Principals**: Authentication for Spacelift stacks
-3. **Spacelift Contexts**: Environment variables and configuration
-4. **Initial Policies**: Base policy attachments
+### 1. Spacelift Space Hierarchy
 
-## Architecture
+Creates a hierarchical space structure aligned with Azure Landing Zone architecture:
 
 ```
-Root Space
-├── landing-zones/          # Application landing zones
-│   ├── corp/              # Corporate workloads
-│   └── online/            # Internet-facing workloads
-├── networking/            # Hub and spoke networks
-│   ├── hub/
-│   └── spokes/
-├── shared-services/       # Platform shared services
-│   ├── logging/
-│   └── monitoring/
-└── management/            # Governance and management
-    ├── policies/
-    └── rbac/
+Root
+├── Platform
+│   ├── Connectivity (hub networking)
+│   ├── Identity (identity management)
+│   └── Management (monitoring and governance)
+└── Landing Zones
+    ├── Corp (internal workloads)
+    └── Online (internet-facing workloads)
 ```
+
+### 2. Azure Service Principals
+
+Creates dedicated service principals for each environment with appropriate RBAC:
+
+- `sp-spacelift-platform` - Platform services
+- `sp-spacelift-connectivity` - Networking resources
+- `sp-spacelift-identity` - Identity management
+- `sp-spacelift-management` - Monitoring and governance
+- `sp-spacelift-landing-zones` - Application workloads
+
+### 3. Spacelift Contexts
+
+Creates contexts for storing credentials and configuration:
+
+- **Azure Environment Context**: Shared tenant and environment configuration
+- **Service Principal Contexts**: Per-environment Azure credentials
+- **Module Registry Context**: Module registry configuration
 
 ## Prerequisites
 
-Before running the bootstrapper:
+1. **Spacelift Account**: Active Spacelift account with API access
+2. **Azure Permissions**: Ability to create service principals and role assignments
+3. **Terraform**: Version >= 1.8.0
 
-1. **Azure**:
-   - Azure subscription with Owner role
-   - Azure CLI authenticated: `az login`
+## Required Environment Variables
 
-2. **Spacelift**:
-   - Spacelift account
-   - API key with admin permissions
-   - Set environment variable: `export SPACELIFT_API_KEY_ENDPOINT=https://your-account.app.spacelift.io`
-   - Set environment variable: `export SPACELIFT_API_KEY_ID=your-key-id`
-   - Set environment variable: `export SPACELIFT_API_KEY_SECRET=your-key-secret`
+### Spacelift API Credentials
 
-3. **Terraform/OpenTofu**:
-   - Version >= 1.8.0
+```bash
+export SPACELIFT_API_KEY_ENDPOINT="https://your-account.app.spacelift.io"
+export SPACELIFT_API_KEY_ID="your-api-key-id"
+export SPACELIFT_API_KEY_SECRET="your-api-key-secret"
+```
+
+### Azure Authentication
+
+```bash
+export ARM_TENANT_ID="your-tenant-id"
+export ARM_SUBSCRIPTION_ID="your-subscription-id"
+export ARM_CLIENT_ID="your-client-id"
+export ARM_CLIENT_SECRET="your-client-secret"
+```
 
 ## Usage
 
 ### 1. Configure Variables
 
-Create `terraform.tfvars`:
+Create a `terraform.tfvars` file:
 
 ```hcl
-# Spacelift Configuration
-spacelift_account = "your-account"
+organization_name      = "contoso"
+azure_tenant_id        = "00000000-0000-0000-0000-000000000000"
+azure_subscription_id  = "00000000-0000-0000-0000-000000000000"
+github_repository      = "contoso/azure-landing-zones"
 
-# Azure Configuration
-azure_subscription_id = "00000000-0000-0000-0000-000000000000"
-azure_tenant_id       = "00000000-0000-0000-0000-000000000000"
-
-# Naming
-environment = "production"
-location    = "eastus"
-name_prefix = "alz"
-
-# Tags
-tags = {
-  ManagedBy   = "Terraform"
-  Environment = "Bootstrap"
-  Purpose     = "Spacelift-Setup"
+# Optional: Customize space structure
+spacelift_spaces = {
+  platform = {
+    name        = "Platform"
+    description = "Platform services and infrastructure"
+    parent_id   = "root"
+  }
+  connectivity = {
+    name        = "Connectivity"
+    description = "Hub networking and connectivity resources"
+    parent_id   = "platform"
+  }
+  # ... additional spaces
 }
 ```
 
 ### 2. Initialize and Apply
 
 ```bash
+cd bootstrapper
 terraform init
-terraform plan -out=tfplan
-terraform apply tfplan
+terraform plan
+terraform apply
 ```
 
-### 3. Save Outputs
+### 3. Retrieve Service Principal Credentials
 
-The bootstrapper outputs sensitive information:
+After successful apply, retrieve the service principal credentials:
 
 ```bash
-# Save service principal credentials securely
-terraform output -json service_principals > sp-credentials.json
+# View credentials (they are marked sensitive)
+terraform output -json service_principal_credentials
 
-# Store in Azure Key Vault (recommended)
-az keyvault secret set \
-  --vault-name "kv-spacelift-bootstrap" \
-  --name "service-principals" \
-  --file sp-credentials.json
-
-# Delete local copy
-shred -u sp-credentials.json
+# Or get specific credentials
+terraform output -json service_principal_credentials | jq -r '.platform.client_id'
 ```
 
-## Components
+### 4. Verify Space Creation
 
-### Spaces (`spaces/`)
-
-Creates hierarchical space structure:
-- Inheritance of policies and contexts
-- RBAC boundaries
-- Organizational segmentation
-
-### Service Principals (`service-principals/`)
-
-Creates Azure service principals with least-privilege access:
-- Hub SP: Manage connectivity resources
-- Spoke SP: Limited to spoke resource groups
-- Management SP: Azure Policy and RBAC
-- Shared Services SP: Platform resources
-
-### Contexts (`contexts/`)
-
-Creates Spacelift contexts for:
-- Azure credentials (per environment)
-- Common environment variables
-- Naming conventions
-- Default tags
-
-## Outputs
-
-Key outputs from bootstrapper:
-
-```hcl
-# Space IDs for stack creation
-space_ids = {
-  landing_zones    = "space-123"
-  networking       = "space-456"
-  shared_services  = "space-789"
-  management       = "space-012"
-}
-
-# Context IDs for stack attachment
-context_ids = {
-  azure_prod       = "context-abc"
-  azure_dev        = "context-def"
-  common_variables = "context-ghi"
-}
-
-# Service Principal IDs
-service_principal_ids = {
-  hub              = "sp-111"
-  spoke            = "sp-222"
-  management       = "sp-333"
-  shared_services  = "sp-444"
-}
+```bash
+# View created spaces
+terraform output space_ids
+terraform output space_hierarchy
 ```
 
 ## Post-Bootstrap Steps
 
 After running the bootstrapper:
 
-1. **Verify Spaces**: Check Spacelift UI for space hierarchy
-2. **Test Authentication**: Create a test stack to verify Azure authentication
-3. **Import Modules**: Register modules in Spacelift module registry
-4. **Deploy Stack Factory**: Deploy administrative stack for hub-spoke creation
+1. **Attach Contexts to Stacks**: When creating new stacks, attach the appropriate contexts:
+   - All stacks: `azure-environment-<org>` context
+   - Platform stacks: `azure-sp-platform` context
+   - Connectivity stacks: `azure-sp-connectivity` context
+   - etc.
 
-## Cleanup
+2. **Configure Module Registry**: Set up your module sources to reference the modules in this repository
 
-To remove bootstrapped resources:
+3. **Create Administrative Stacks**: Use the stack factory to create your first administrative stacks
 
-```bash
-# WARNING: This will delete all Spacelift spaces and Azure service principals
-terraform destroy
+4. **Apply Policies**: Attach policies from the policy library to appropriate spaces
+
+## Configuration Reference
+
+### Variables
+
+| Variable | Description | Required | Default |
+|----------|-------------|----------|---------|
+| `organization_name` | Organization name for resource naming | Yes | - |
+| `azure_tenant_id` | Azure AD Tenant ID | Yes | - |
+| `azure_subscription_id` | Azure Subscription ID | Yes | - |
+| `create_service_principals` | Create Azure service principals | No | `true` |
+| `service_principal_names` | Map of service principal names | No | See variables.tf |
+| `spacelift_spaces` | Space hierarchy configuration | No | See variables.tf |
+| `github_repository` | GitHub repository (owner/repo) | No | `null` |
+| `vcs_provider` | VCS provider | No | `"github"` |
+| `azure_environment` | Azure environment | No | `"public"` |
+| `worker_pool_id` | Spacelift worker pool ID | No | `null` |
+
+### Outputs
+
+| Output | Description |
+|--------|-------------|
+| `space_ids` | Map of space names to IDs |
+| `space_hierarchy` | Complete space hierarchy structure |
+| `service_principal_app_ids` | Service principal client IDs |
+| `context_ids` | Spacelift context IDs |
+| `service_principal_credentials` | SP credentials (sensitive) |
+
+## Security Considerations
+
+1. **Service Principal Secrets**: The client secrets are stored in Terraform state. Ensure your state is encrypted and access-controlled.
+
+2. **Least Privilege**: By default, service principals get Contributor at subscription level. In production, scope these more tightly:
+   ```hcl
+   # Example: Scope to specific resource groups
+   scope = azurerm_resource_group.connectivity.id
+   ```
+
+3. **Secret Rotation**: Client secrets expire after 1 year. Implement a rotation process.
+
+4. **Context Access**: Spacelift contexts inherit down the space hierarchy. Review which stacks have access to which credentials.
+
+## Customization
+
+### Adding Custom Spaces
+
+Add to the `spacelift_spaces` variable:
+
+```hcl
+spacelift_spaces = {
+  # ... existing spaces
+  sandbox = {
+    name        = "Sandbox"
+    description = "Sandbox environment for testing"
+    parent_id   = "root"
+  }
+}
+```
+
+### Using Existing Service Principals
+
+If you have existing service principals:
+
+```hcl
+create_service_principals = false
+
+# Then create contexts manually or use data sources
+```
+
+### Private Worker Pools
+
+If using private workers:
+
+```hcl
+worker_pool_id = "my-worker-pool-id"
 ```
 
 ## Troubleshooting
 
-### Service Principal Permission Issues
+### Service Principal Creation Fails
 
-If stacks fail with permission errors:
-1. Verify SP has correct role assignments
-2. Check scope of role assignments (subscription vs resource group)
-3. Wait for Azure AD replication (can take 5-10 minutes)
+If service principal creation fails with permission errors:
 
-### Spacelift API Errors
+1. Ensure you have `Application.ReadWrite.All` permission in Azure AD
+2. Or set `create_service_principals = false` and create them manually
 
-If bootstrapper fails with API errors:
-1. Verify API key has admin permissions
-2. Check API endpoint URL
-3. Verify account name is correct
+### Space Already Exists
 
-## Security Considerations
+If running bootstrapper multiple times, you may encounter conflicts. Use Terraform state to manage existing resources:
 
-1. **Service Principal Secrets**: Never commit credentials to Git
-2. **Least Privilege**: Service principals have minimum required permissions
-3. **Rotation**: Rotate SP credentials regularly (90 days recommended)
-4. **Audit**: Enable Azure AD sign-in logs for SP activity
-5. **Context Secrets**: Mark sensitive context variables as secret
+```bash
+terraform import spacelift_space.root_level[\"platform\"] platform-space-id
+```
 
-## References
+## Next Steps
 
-- [Spacelift Spaces](https://docs.spacelift.io/concepts/spaces)
-- [Spacelift Contexts](https://docs.spacelift.io/concepts/configuration/context)
-- [Azure Service Principals](https://learn.microsoft.com/en-us/azure/active-directory/develop/app-objects-and-service-principals)
+After bootstrapping:
+
+1. Review the [Policy Library](../policies/README.md)
+2. Explore the [Stack Factory](../factory/README.md)
+3. Use the [CLI tool](../cli/README.md) to generate your first stack
+
+## License
+
+MIT License - see [LICENSE](../LICENSE) for details.

@@ -1,0 +1,6 @@
+version: "1"
+module:
+  name: azure-container-registry
+  description: "Azure Container Registry with geo-replication and webhooks"
+  provider: azurerm
+  category: shared-services

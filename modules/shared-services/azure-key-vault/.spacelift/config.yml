@@ -1,0 +1,6 @@
+version: "1"
+module:
+  name: azure-key-vault
+  description: "Azure Key Vault with RBAC authorization"
+  provider: azurerm
+  category: shared-services

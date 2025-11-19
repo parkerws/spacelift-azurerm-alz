@@ -1,0 +1,6 @@
+version: "1"
+module:
+  name: azure-policy-assignment
+  description: "Azure Policy Assignment for governance and compliance"
+  provider: azurerm
+  category: management
