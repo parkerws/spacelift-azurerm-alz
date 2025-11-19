@@ -1,0 +1,63 @@
+name: 'Setup Terraform with Azure Backend'
+description: 'Configure Terraform with Azure Storage backend'
+inputs:
+  terraform_version:
+    description: 'Terraform version to install'
+    required: false
+    default: '1.8.0'
+  working_directory:
+    description: 'Working directory for Terraform'
+    required: true
+  stack_name:
+    description: 'Stack name for state file key'
+    required: true
+  environment:
+    description: 'Environment (production, staging, development)'
+    required: true
+  azure_client_id:
+    description: 'Azure Client ID'
+    required: true
+  azure_tenant_id:
+    description: 'Azure Tenant ID'
+    required: true
+  azure_subscription_id:
+    description: 'Azure Subscription ID'
+    required: true
+  state_resource_group:
+    description: 'Resource group for Terraform state'
+    required: true
+  state_storage_account:
+    description: 'Storage account for Terraform state'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ inputs.terraform_version }}
+
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        client-id: ${{ inputs.azure_client_id }}
+        tenant-id: ${{ inputs.azure_tenant_id }}
+        subscription-id: ${{ inputs.azure_subscription_id }}
+
+    - name: Terraform Init
+      shell: bash
+      working-directory: ${{ inputs.working_directory }}
+      run: |
+        terraform init \
+          -backend-config="resource_group_name=${{ inputs.state_resource_group }}" \
+          -backend-config="storage_account_name=${{ inputs.state_storage_account }}" \
+          -backend-config="container_name=tfstate-${{ inputs.environment }}" \
+          -backend-config="key=${{ inputs.stack_name }}.tfstate"
+
+    - name: Cache Terraform Providers
+      uses: actions/cache@v3
+      with:
+        path: ${{ inputs.working_directory }}/.terraform
+        key: terraform-${{ hashFiles(format('{0}/.terraform.lock.hcl', inputs.working_directory)) }}
+        restore-keys: terraform-

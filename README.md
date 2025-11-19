@@ -1,6 +1,19 @@
-# Spacelift Azure Landing Zone Factory
+# Azure Landing Zone Factory
 
-A comprehensive Spacelift factory for Azure landing zones with full automation for environment setup, space structure, policies, module registry, and hub-and-spoke networking patterns.
+A comprehensive factory for Azure landing zones with full automation for environment setup, policies, module registry, and hub-and-spoke networking patterns.
+
+## Deployment Options
+
+This factory supports **two deployment platforms**:
+
+| Platform | Best For | Documentation |
+|----------|----------|---------------|
+| **Spacelift** | Enterprise deployments, complex governance, managed state | [Spacelift Guide](./bootstrapper/README.md) |
+| **GitHub Actions** | Quick start, cost optimization, GitHub-centric teams | [GitHub Actions Guide](./github-actions/README.md) |
+
+📊 **Not sure which to choose?** See the [Deployment Platform Comparison](./DEPLOYMENT-COMPARISON.md)
+
+Both platforms use the same Terraform modules and architecture - choose based on your organization's needs.
 
 ## Architecture
 
@@ -31,6 +44,10 @@ Management Groups
 │   ├── spaces/           # Space hierarchy setup
 │   ├── service-principals/  # Azure SP configuration
 │   └── contexts/         # Spacelift contexts
+├── github-actions/        # GitHub Actions alternative
+│   ├── bootstrapper/     # GitHub configuration setup
+│   ├── workflows/        # Reusable workflows & templates
+│   └── actions/          # Custom composite actions
 ├── modules/              # Terraform modules (Spacelift Module Registry)
 │   ├── networking/       # Priority 1: Foundation networking
 │   │   ├── azure-vnet/
@@ -66,9 +83,16 @@ Management Groups
 ## Features
 
 ### 🚀 Environment Bootstrapper
-- Automated Spacelift space hierarchy creation
-- Azure service principal setup with least-privilege permissions
+**Spacelift**:
+- Automated space hierarchy creation
+- Azure service principal setup with OIDC or client secrets
 - Context and integration configuration
+
+**GitHub Actions**:
+- GitHub Environments with protection rules
+- Azure service principal with OIDC federation (recommended)
+- Repository and environment secrets configuration
+- Branch protection rules and policies
 
 ### 📋 Policy Library
 - **Plan Policies**: Cost controls, compliance checks, security validation

@@ -1,0 +1,132 @@
+name: Terraform Drift Detection (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: 'Environment to check for drift'
+        required: true
+        type: string
+      working_directory:
+        description: 'Working directory for Terraform'
+        required: true
+        type: string
+      terraform_version:
+        description: 'Terraform version'
+        required: false
+        type: string
+        default: '1.8.0'
+      stack_name:
+        description: 'Stack name for state file'
+        required: true
+        type: string
+      create_issue_on_drift:
+        description: 'Create GitHub issue if drift detected'
+        required: false
+        type: boolean
+        default: true
+    outputs:
+      drift_detected:
+        description: 'Whether drift was detected'
+        value: ${{ jobs.detect-drift.outputs.drift_detected }}
+
+jobs:
+  detect-drift:
+    name: Detect Configuration Drift
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    outputs:
+      drift_detected: ${{ steps.plan.outputs.exitcode == '2' }}
+
+    defaults:
+      run:
+        working-directory: ${{ inputs.working_directory }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ inputs.terraform_version }}
+          terraform_wrapper: true
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Terraform Init
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=${{ secrets.TERRAFORM_STATE_RESOURCE_GROUP }}" \
+            -backend-config="storage_account_name=${{ secrets.TERRAFORM_STATE_STORAGE_ACCOUNT }}" \
+            -backend-config="container_name=tfstate-${{ inputs.environment }}" \
+            -backend-config="key=${{ inputs.stack_name }}.tfstate"
+
+      - name: Terraform Plan (Refresh Only)
+        id: plan
+        run: |
+          terraform plan -detailed-exitcode -no-color \
+            -var="environment=${{ inputs.environment }}" \
+            -out=drift.tfplan
+        continue-on-error: true
+
+      - name: Drift Detection Summary
+        run: |
+          if [ "${{ steps.plan.outputs.exitcode }}" == "0" ]; then
+            echo "### No Drift Detected ✅" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Infrastructure matches Terraform configuration." >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ steps.plan.outputs.exitcode }}" == "2" ]; then
+            echo "### Drift Detected ⚠️" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Infrastructure has drifted from Terraform configuration." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "<details><summary>Show Changes</summary>" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`terraform" >> $GITHUB_STEP_SUMMARY
+            terraform show -no-color drift.tfplan >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            echo "</details>" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### Drift Detection Failed ❌" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Create Issue on Drift
+        if: inputs.create_issue_on_drift && steps.plan.outputs.exitcode == '2'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `[Drift] Configuration drift detected in ${{ inputs.stack_name }}`,
+              body: `## Configuration Drift Detected
+
+              **Stack**: \`${{ inputs.stack_name }}\`
+              **Environment**: \`${{ inputs.environment }}\`
+              **Detected**: ${new Date().toISOString()}
+
+              Infrastructure has drifted from the Terraform configuration.
+
+              ### Next Steps
+
+              1. Review the changes in the workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+              2. Determine if changes should be:
+                 - Applied to infrastructure (run Terraform apply)
+                 - Imported into state (manual changes were intentional)
+                 - Reverted (manual changes should be undone)
+
+              ### Drift Details
+
+              See the workflow logs for detailed drift information.
+              `,
+              labels: ['drift-detection', 'infrastructure', '${{ inputs.environment }}']
+            });
+
+            console.log(`Created issue #${issue.data.number}`);

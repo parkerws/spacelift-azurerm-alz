@@ -1,0 +1,144 @@
+name: Spoke Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      spoke_name:
+        description: 'Spoke stack name (e.g., spoke-corp-prod-001)'
+        required: true
+        type: string
+      environment:
+        description: 'Environment'
+        required: true
+        type: choice
+        options:
+          - production
+          - staging
+          - development
+      location:
+        description: 'Azure region'
+        required: true
+        type: choice
+        options:
+          - eastus
+          - westus2
+          - centralus
+          - northeurope
+          - westeurope
+      hub_name:
+        description: 'Hub stack name to depend on'
+        required: true
+        type: string
+      action:
+        description: 'Action to perform'
+        required: true
+        type: choice
+        options:
+          - plan
+          - apply
+          - destroy
+      address_space:
+        description: 'Spoke VNet CIDR (e.g., 10.1.0.0/16)'
+        required: false
+        type: string
+        default: '10.1.0.0/16'
+
+  push:
+    branches:
+      - main
+    paths:
+      - 'stack-factory/spoke/**'
+      - '.github/workflows/spoke/**'
+
+  pull_request:
+    paths:
+      - 'stack-factory/spoke/**'
+      - '.github/workflows/spoke/**'
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  check-hub-deployed:
+    name: Check Hub Deployment Status
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment || 'development' }}
+    outputs:
+      hub_deployed: ${{ steps.check.outputs.deployed }}
+      hub_vnet_id: ${{ steps.outputs.outputs.vnet_id }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Check Hub Deployment
+        id: check
+        run: |
+          # Check if hub VNet exists
+          HUB_NAME="${{ inputs.hub_name || 'hub-connectivity-production' }}"
+          ENV="${{ inputs.environment || 'development' }}"
+          LOCATION="${{ inputs.location || 'eastus' }}"
+
+          RG_NAME="rg-hub-${ENV}-${LOCATION}"
+
+          if az group show --name "$RG_NAME" --query id -o tsv 2>/dev/null; then
+            echo "deployed=true" >> $GITHUB_OUTPUT
+            echo "::notice::Hub infrastructure is deployed"
+          else
+            echo "deployed=false" >> $GITHUB_OUTPUT
+            echo "::warning::Hub infrastructure is not deployed. Deploy hub first."
+          fi
+
+      - name: Fail if Hub Not Deployed
+        if: steps.check.outputs.deployed != 'true' && github.event.inputs.action != 'destroy'
+        run: |
+          echo "::error::Hub infrastructure must be deployed before spoke deployment"
+          exit 1
+
+  terraform-plan:
+    name: Plan Spoke Infrastructure
+    needs: check-hub-deployed
+    if: github.event.inputs.action == 'plan' || github.event.inputs.action == 'apply' || github.event_name != 'workflow_dispatch'
+    uses: ./.github/workflows/reusable/terraform-plan.yml
+    with:
+      environment: ${{ inputs.environment || 'development' }}
+      working_directory: stack-factory/spoke
+      stack_name: ${{ inputs.spoke_name || 'spoke-dev-001' }}
+      terraform_version: '1.8.0'
+      enable_cost_estimation: true
+    secrets: inherit
+
+  terraform-apply:
+    name: Apply Spoke Infrastructure
+    needs: [check-hub-deployed, terraform-plan]
+    if: github.event.inputs.action == 'apply'
+    uses: ./.github/workflows/reusable/terraform-apply.yml
+    with:
+      environment: ${{ inputs.environment }}
+      working_directory: stack-factory/spoke
+      stack_name: ${{ inputs.spoke_name }}
+      terraform_version: '1.8.0'
+      plan_run_number: ${{ github.run_number }}
+    secrets: inherit
+
+  terraform-destroy:
+    name: Destroy Spoke Infrastructure
+    needs: check-hub-deployed
+    if: github.event.inputs.action == 'destroy'
+    uses: ./.github/workflows/reusable/terraform-destroy.yml
+    with:
+      environment: ${{ inputs.environment }}
+      working_directory: stack-factory/spoke
+      stack_name: ${{ inputs.spoke_name }}
+      terraform_version: '1.8.0'
+      confirmation: ${{ inputs.spoke_name }}
+    secrets: inherit

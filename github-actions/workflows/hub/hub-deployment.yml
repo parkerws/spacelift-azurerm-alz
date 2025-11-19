@@ -1,0 +1,119 @@
+name: Hub Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment (production, staging, development)'
+        required: true
+        type: choice
+        options:
+          - production
+          - staging
+          - development
+      location:
+        description: 'Azure region'
+        required: true
+        type: choice
+        options:
+          - eastus
+          - westus2
+          - centralus
+          - northeurope
+          - westeurope
+      action:
+        description: 'Action to perform'
+        required: true
+        type: choice
+        options:
+          - plan
+          - apply
+          - destroy
+      address_space:
+        description: 'Hub VNet CIDR (e.g., 10.0.0.0/16)'
+        required: false
+        type: string
+        default: '10.0.0.0/16'
+
+  push:
+    branches:
+      - main
+    paths:
+      - 'stack-factory/hub/**'
+      - '.github/workflows/hub/**'
+
+  pull_request:
+    paths:
+      - 'stack-factory/hub/**'
+      - '.github/workflows/hub/**'
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  determine-action:
+    name: Determine Action
+    runs-on: ubuntu-latest
+    outputs:
+      action: ${{ steps.determine.outputs.action }}
+      environment: ${{ steps.determine.outputs.environment }}
+      stack_name: ${{ steps.determine.outputs.stack_name }}
+    steps:
+      - name: Determine Action and Environment
+        id: determine
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "action=${{ inputs.action }}" >> $GITHUB_OUTPUT
+            echo "environment=${{ inputs.environment }}" >> $GITHUB_OUTPUT
+            echo "stack_name=hub-connectivity-${{ inputs.environment }}-${{ inputs.location }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event_name }}" == "push" ]; then
+            echo "action=apply" >> $GITHUB_OUTPUT
+            echo "environment=production" >> $GITHUB_OUTPUT
+            echo "stack_name=hub-connectivity-production-eastus" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event_name }}" == "pull_request" ]; then
+            echo "action=plan" >> $GITHUB_OUTPUT
+            echo "environment=development" >> $GITHUB_OUTPUT
+            echo "stack_name=hub-connectivity-development-eastus" >> $GITHUB_OUTPUT
+          fi
+
+  terraform-plan:
+    name: Plan Hub Infrastructure
+    needs: determine-action
+    if: needs.determine-action.outputs.action == 'plan' || needs.determine-action.outputs.action == 'apply'
+    uses: ./.github/workflows/reusable/terraform-plan.yml
+    with:
+      environment: ${{ needs.determine-action.outputs.environment }}
+      working_directory: stack-factory/hub
+      stack_name: ${{ needs.determine-action.outputs.stack_name }}
+      terraform_version: '1.8.0'
+      enable_cost_estimation: true
+    secrets: inherit
+
+  terraform-apply:
+    name: Apply Hub Infrastructure
+    needs: [determine-action, terraform-plan]
+    if: needs.determine-action.outputs.action == 'apply'
+    uses: ./.github/workflows/reusable/terraform-apply.yml
+    with:
+      environment: ${{ needs.determine-action.outputs.environment }}
+      working_directory: stack-factory/hub
+      stack_name: ${{ needs.determine-action.outputs.stack_name }}
+      terraform_version: '1.8.0'
+      plan_run_number: ${{ github.run_number }}
+    secrets: inherit
+
+  terraform-destroy:
+    name: Destroy Hub Infrastructure
+    needs: determine-action
+    if: needs.determine-action.outputs.action == 'destroy'
+    uses: ./.github/workflows/reusable/terraform-destroy.yml
+    with:
+      environment: ${{ needs.determine-action.outputs.environment }}
+      working_directory: stack-factory/hub
+      stack_name: ${{ needs.determine-action.outputs.stack_name }}
+      terraform_version: '1.8.0'
+      confirmation: ${{ needs.determine-action.outputs.stack_name }}
+    secrets: inherit

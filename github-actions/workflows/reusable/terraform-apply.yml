@@ -1,0 +1,109 @@
+name: Terraform Apply (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: 'Environment (production, staging, development)'
+        required: true
+        type: string
+      working_directory:
+        description: 'Working directory for Terraform'
+        required: true
+        type: string
+      terraform_version:
+        description: 'Terraform version'
+        required: false
+        type: string
+        default: '1.8.0'
+      stack_name:
+        description: 'Stack name for state file'
+        required: true
+        type: string
+      plan_run_number:
+        description: 'Run number of the plan to apply'
+        required: true
+        type: string
+    outputs:
+      apply_output:
+        description: 'Terraform apply output'
+        value: ${{ jobs.apply.outputs.apply_output }}
+
+jobs:
+  apply:
+    name: Terraform Apply
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    outputs:
+      apply_output: ${{ steps.apply.outputs.stdout }}
+
+    defaults:
+      run:
+        working-directory: ${{ inputs.working_directory }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ inputs.terraform_version }}
+          terraform_wrapper: true
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Download Plan
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan-${{ inputs.stack_name }}-${{ inputs.plan_run_number }}
+          path: ${{ inputs.working_directory }}
+
+      - name: Terraform Init
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=${{ secrets.TERRAFORM_STATE_RESOURCE_GROUP }}" \
+            -backend-config="storage_account_name=${{ secrets.TERRAFORM_STATE_STORAGE_ACCOUNT }}" \
+            -backend-config="container_name=tfstate-${{ inputs.environment }}" \
+            -backend-config="key=${{ inputs.stack_name }}.tfstate"
+
+      - name: Terraform Apply
+        id: apply
+        run: terraform apply -auto-approve tfplan
+
+      - name: Terraform Output
+        id: output
+        run: terraform output -json > outputs.json
+
+      - name: Upload Outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: outputs-${{ inputs.stack_name }}-${{ github.run_number }}
+          path: ${{ inputs.working_directory }}/outputs.json
+          retention-days: 30
+
+      - name: Post Deployment Summary
+        run: |
+          echo "### Deployment Summary 🚀" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment**: ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Stack**: ${{ inputs.stack_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Status**: ✅ Success" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Deployed at: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+
+      - name: Notify on Failure
+        if: failure()
+        run: |
+          echo "### Deployment Failed ❌" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment**: ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Stack**: ${{ inputs.stack_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Please review the logs and retry."

@@ -1,0 +1,150 @@
+name: Terraform Plan (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: 'Environment (production, staging, development)'
+        required: true
+        type: string
+      working_directory:
+        description: 'Working directory for Terraform'
+        required: true
+        type: string
+      terraform_version:
+        description: 'Terraform version'
+        required: false
+        type: string
+        default: '1.8.0'
+      stack_name:
+        description: 'Stack name for state file'
+        required: true
+        type: string
+      enable_cost_estimation:
+        description: 'Enable cost estimation'
+        required: false
+        type: boolean
+        default: true
+    outputs:
+      plan_output:
+        description: 'Terraform plan output'
+        value: ${{ jobs.plan.outputs.plan_output }}
+      has_changes:
+        description: 'Whether plan has changes'
+        value: ${{ jobs.plan.outputs.has_changes }}
+      estimated_cost:
+        description: 'Estimated monthly cost'
+        value: ${{ jobs.plan.outputs.estimated_cost }}
+
+jobs:
+  plan:
+    name: Terraform Plan
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    outputs:
+      plan_output: ${{ steps.plan.outputs.stdout }}
+      has_changes: ${{ steps.plan.outputs.exitcode == '2' }}
+      estimated_cost: ${{ steps.cost.outputs.monthly_cost }}
+
+    defaults:
+      run:
+        working-directory: ${{ inputs.working_directory }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ inputs.terraform_version }}
+          terraform_wrapper: true
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Terraform Format Check
+        id: fmt
+        run: terraform fmt -check -recursive
+        continue-on-error: true
+
+      - name: Terraform Init
+        id: init
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=${{ secrets.TERRAFORM_STATE_RESOURCE_GROUP }}" \
+            -backend-config="storage_account_name=${{ secrets.TERRAFORM_STATE_STORAGE_ACCOUNT }}" \
+            -backend-config="container_name=tfstate-${{ inputs.environment }}" \
+            -backend-config="key=${{ inputs.stack_name }}.tfstate"
+
+      - name: Terraform Validate
+        id: validate
+        run: terraform validate -no-color
+
+      - name: Terraform Plan
+        id: plan
+        run: |
+          terraform plan \
+            -no-color \
+            -detailed-exitcode \
+            -out=tfplan \
+            -var="environment=${{ inputs.environment }}"
+        continue-on-error: true
+        env:
+          TF_VAR_location: ${{ vars.AZURE_LOCATION || 'eastus' }}
+
+      - name: Upload Plan
+        if: steps.plan.outputs.exitcode == '0' || steps.plan.outputs.exitcode == '2'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-${{ inputs.stack_name }}-${{ github.run_number }}
+          path: ${{ inputs.working_directory }}/tfplan
+          retention-days: 5
+
+      - name: Show Plan
+        if: steps.plan.outputs.exitcode == '0' || steps.plan.outputs.exitcode == '2'
+        run: terraform show -no-color tfplan
+
+      - name: Cost Estimation
+        if: inputs.enable_cost_estimation && (steps.plan.outputs.exitcode == '0' || steps.plan.outputs.exitcode == '2')
+        id: cost
+        run: |
+          # Placeholder for cost estimation
+          # In production, integrate with Infracost or similar
+          echo "monthly_cost=0" >> $GITHUB_OUTPUT
+          echo "::notice::Cost estimation: Integrate Infracost for accurate estimates"
+
+      - name: Comment PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const output = `#### Terraform Plan 📝\`${{ steps.plan.outcome }}\`
+
+            <details><summary>Show Plan</summary>
+
+            \`\`\`terraform
+            ${{ steps.plan.outputs.stdout }}
+            \`\`\`
+
+            </details>
+
+            **Environment**: \`${{ inputs.environment }}\`
+            **Stack**: \`${{ inputs.stack_name }}\`
+            **Format**: \`${{ steps.fmt.outcome }}\`
+            **Init**: \`${{ steps.init.outcome }}\`
+            **Validate**: \`${{ steps.validate.outcome }}\`
+
+            *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            })

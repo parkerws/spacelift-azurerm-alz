@@ -1,0 +1,94 @@
+name: Terraform Destroy (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: 'Environment (production, staging, development)'
+        required: true
+        type: string
+      working_directory:
+        description: 'Working directory for Terraform'
+        required: true
+        type: string
+      terraform_version:
+        description: 'Terraform version'
+        required: false
+        type: string
+        default: '1.8.0'
+      stack_name:
+        description: 'Stack name for state file'
+        required: true
+        type: string
+      confirmation:
+        description: 'Type stack name to confirm destruction'
+        required: true
+        type: string
+
+jobs:
+  validate-confirmation:
+    name: Validate Confirmation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Confirmation
+        run: |
+          if [ "${{ inputs.confirmation }}" != "${{ inputs.stack_name }}" ]; then
+            echo "::error::Confirmation does not match stack name"
+            echo "Expected: ${{ inputs.stack_name }}"
+            echo "Got: ${{ inputs.confirmation }}"
+            exit 1
+          fi
+
+  destroy:
+    name: Terraform Destroy
+    needs: validate-confirmation
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    defaults:
+      run:
+        working-directory: ${{ inputs.working_directory }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ inputs.terraform_version }}
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Terraform Init
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=${{ secrets.TERRAFORM_STATE_RESOURCE_GROUP }}" \
+            -backend-config="storage_account_name=${{ secrets.TERRAFORM_STATE_STORAGE_ACCOUNT }}" \
+            -backend-config="container_name=tfstate-${{ inputs.environment }}" \
+            -backend-config="key=${{ inputs.stack_name }}.tfstate"
+
+      - name: Terraform Plan Destroy
+        id: plan
+        run: |
+          terraform plan -destroy -no-color -out=destroy.tfplan \
+            -var="environment=${{ inputs.environment }}"
+
+      - name: Terraform Destroy
+        id: destroy
+        run: terraform apply -auto-approve destroy.tfplan
+
+      - name: Post Destruction Summary
+        run: |
+          echo "### Destruction Complete 🗑️" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment**: ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Stack**: ${{ inputs.stack_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Status**: ✅ Destroyed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Destroyed at: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY

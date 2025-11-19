@@ -1,0 +1,85 @@
+name: Scheduled Drift Detection
+
+on:
+  schedule:
+    # Run every day at 6 AM UTC
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to scan'
+        required: false
+        type: choice
+        options:
+          - all
+          - production
+          - staging
+          - development
+        default: 'all'
+
+permissions:
+  id-token: write
+  contents: read
+  issues: write
+
+jobs:
+  list-stacks:
+    name: List Terraform Stacks
+    runs-on: ubuntu-latest
+    outputs:
+      stacks: ${{ steps.list.outputs.stacks }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: List Stacks
+        id: list
+        run: |
+          # In production, query Terraform Cloud/Azure Storage for all state files
+          # For now, hardcode known stacks
+          STACKS='[
+            {"name": "hub-connectivity-production-eastus", "env": "production", "dir": "stack-factory/hub"},
+            {"name": "spoke-corp-prod-001", "env": "production", "dir": "stack-factory/spoke"},
+            {"name": "spoke-online-prod-001", "env": "production", "dir": "stack-factory/spoke"}
+          ]'
+
+          # Filter by environment if specified
+          if [ "${{ inputs.environment }}" != "all" ] && [ "${{ inputs.environment }}" != "" ]; then
+            STACKS=$(echo "$STACKS" | jq -c "[.[] | select(.env == \"${{ inputs.environment }}\")]")
+          fi
+
+          echo "stacks=$(echo $STACKS | jq -c .)" >> $GITHUB_OUTPUT
+
+  detect-drift:
+    name: Drift Detection - ${{ matrix.stack.name }}
+    needs: list-stacks
+    runs-on: ubuntu-latest
+    if: needs.list-stacks.outputs.stacks != '[]'
+    strategy:
+      matrix:
+        stack: ${{ fromJson(needs.list-stacks.outputs.stacks) }}
+      fail-fast: false
+      max-parallel: 5
+    uses: ./.github/workflows/reusable/terraform-drift-detection.yml
+    with:
+      environment: ${{ matrix.stack.env }}
+      working_directory: ${{ matrix.stack.dir }}
+      stack_name: ${{ matrix.stack.name }}
+      create_issue_on_drift: true
+    secrets: inherit
+
+  summary:
+    name: Drift Detection Summary
+    needs: [list-stacks, detect-drift]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create Summary
+        run: |
+          echo "### Drift Detection Results 📊" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Scanned**: $(echo '${{ needs.list-stacks.outputs.stacks }}' | jq length) stacks" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment**: ${{ inputs.environment || 'all' }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Time**: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "See individual job results for details." >> $GITHUB_STEP_SUMMARY

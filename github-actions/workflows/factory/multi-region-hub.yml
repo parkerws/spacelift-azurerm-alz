@@ -1,0 +1,90 @@
+name: Multi-Region Hub Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment'
+        required: true
+        type: choice
+        options:
+          - production
+          - staging
+          - development
+      action:
+        description: 'Action to perform'
+        required: true
+        type: choice
+        options:
+          - plan
+          - apply
+      regions:
+        description: 'Regions to deploy (comma-separated)'
+        required: false
+        type: string
+        default: 'eastus,westus2,northeurope'
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  prepare:
+    name: Prepare Regional Deployments
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.prepare.outputs.matrix }}
+    steps:
+      - name: Prepare Matrix
+        id: prepare
+        run: |
+          REGIONS="${{ inputs.regions }}"
+          IFS=',' read -ra REGION_ARRAY <<< "$REGIONS"
+
+          MATRIX="["
+          for region in "${REGION_ARRAY[@]}"; do
+            region=$(echo "$region" | tr -d ' ')
+            MATRIX="$MATRIX{\"region\":\"$region\",\"name\":\"hub-connectivity-${{ inputs.environment }}-$region\"},"
+          done
+          MATRIX="${MATRIX%,}]"
+
+          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+
+  deploy-hubs:
+    name: Deploy Hub - ${{ matrix.hub.region }}
+    needs: prepare
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    strategy:
+      matrix:
+        hub: ${{ fromJson(needs.prepare.outputs.matrix) }}
+      fail-fast: false
+      max-parallel: 3
+    uses: ./.github/workflows/hub/hub-deployment.yml
+    with:
+      environment: ${{ inputs.environment }}
+      location: ${{ matrix.hub.region }}
+      action: ${{ inputs.action }}
+    secrets: inherit
+
+  configure-peering:
+    name: Configure Inter-Region Peering
+    needs: deploy-hubs
+    if: inputs.action == 'apply'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Configure VNet Peering
+        run: |
+          echo "Configuring hub-to-hub peering across regions..."
+          # Logic to create peering between hub VNets
+          # This would be implemented based on your peering requirements
+          echo "::notice::Hub peering configuration placeholder - implement based on requirements"
