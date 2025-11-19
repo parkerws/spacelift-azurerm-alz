@@ -1,0 +1,51 @@
+version: "1"
+
+module:
+  name: azure-vnet-peering
+  description: "Azure VNet Peering module for hub-spoke topology automation"
+  provider: azurerm
+  category: hub-networking
+
+tests:
+  - name: basic-validation
+    description: "Validate basic VNet peering configuration"
+    command: |
+      cd examples/basic
+      terraform init
+      terraform validate
+      terraform fmt -check
+
+  - name: basic-plan
+    description: "Test basic bidirectional VNet peering"
+    command: |
+      cd examples/basic
+      terraform init
+      terraform plan -out=tfplan
+
+  - name: advanced-validation
+    description: "Validate advanced hub-spoke peering configurations"
+    command: |
+      cd examples/advanced
+      terraform init
+      terraform validate
+      terraform fmt -check
+
+  - name: advanced-plan
+    description: "Test hub-spoke topology with gateway transit"
+    command: |
+      cd examples/advanced
+      terraform init
+      terraform plan -out=tfplan
+
+stack_defaults:
+  runner_image: public.ecr.aws/spacelift/runner-terraform:latest
+  terraform_version: "1.9.0"
+
+policies:
+  plan:
+    - network-topology
+    - peering-validation
+
+notifications:
+  on_failure: true
+  on_success: false

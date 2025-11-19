@@ -1,0 +1,52 @@
+version: "1"
+
+module:
+  name: azure-bastion
+  description: "Azure Bastion module for secure RDP/SSH access without public IPs"
+  provider: azurerm
+  category: hub-networking
+
+tests:
+  - name: basic-validation
+    description: "Validate basic Bastion configuration"
+    command: |
+      cd examples/basic
+      terraform init
+      terraform validate
+      terraform fmt -check
+
+  - name: basic-plan
+    description: "Test basic Bastion deployment"
+    command: |
+      cd examples/basic
+      terraform init
+      terraform plan -out=tfplan
+
+  - name: advanced-validation
+    description: "Validate advanced Bastion configurations"
+    command: |
+      cd examples/advanced
+      terraform init
+      terraform validate
+      terraform fmt -check
+
+  - name: advanced-plan
+    description: "Test Standard, Premium, and custom IP configurations"
+    command: |
+      cd examples/advanced
+      terraform init
+      terraform plan -out=tfplan
+
+stack_defaults:
+  runner_image: public.ecr.aws/spacelift/runner-terraform:latest
+  terraform_version: "1.9.0"
+
+policies:
+  plan:
+    - network-security
+    - bastion-validation
+    - cost-control
+
+notifications:
+  on_failure: true
+  on_success: false
