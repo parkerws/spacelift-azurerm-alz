@@ -1,0 +1,57 @@
+version: "1"
+
+# Module metadata
+module:
+  name: azure-nsg
+  description: "Azure Network Security Group module with security rule management and ASG support"
+  provider: azurerm
+  category: networking
+
+# Automated tests
+tests:
+  - name: basic-validation
+    description: "Validate basic NSG configuration"
+    command: |
+      cd examples/basic
+      terraform init
+      terraform validate
+      terraform fmt -check
+
+  - name: basic-plan
+    description: "Test basic NSG with common security rules"
+    command: |
+      cd examples/basic
+      terraform init
+      terraform plan -out=tfplan
+
+  - name: advanced-validation
+    description: "Validate advanced NSG configurations with ASGs"
+    command: |
+      cd examples/advanced
+      terraform init
+      terraform validate
+      terraform fmt -check
+
+  - name: advanced-plan
+    description: "Test advanced NSG with application security groups and tiered rules"
+    command: |
+      cd examples/advanced
+      terraform init
+      terraform plan -out=tfplan
+
+# Spacelift stack defaults for modules using this
+stack_defaults:
+  runner_image: public.ecr.aws/spacelift/runner-terraform:latest
+  terraform_version: "1.9.0"
+
+# Auto-attach policies for stacks using this module
+policies:
+  plan:
+    - network-security
+    - nsg-rules-validation
+    - security-compliance
+
+# Notification settings
+notifications:
+  on_failure: true
+  on_success: false

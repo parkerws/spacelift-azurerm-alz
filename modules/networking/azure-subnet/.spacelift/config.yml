@@ -1,0 +1,56 @@
+version: "1"
+
+# Module metadata
+module:
+  name: azure-subnet
+  description: "Azure Subnet module with support for service endpoints, delegations, and network policies"
+  provider: azurerm
+  category: networking
+
+# Automated tests
+tests:
+  - name: basic-validation
+    description: "Validate basic subnet configuration"
+    command: |
+      cd examples/basic
+      terraform init
+      terraform validate
+      terraform fmt -check
+
+  - name: basic-plan
+    description: "Test basic subnet deployment plan"
+    command: |
+      cd examples/basic
+      terraform init
+      terraform plan -out=tfplan
+
+  - name: advanced-validation
+    description: "Validate advanced subnet configurations with delegations and service endpoints"
+    command: |
+      cd examples/advanced
+      terraform init
+      terraform validate
+      terraform fmt -check
+
+  - name: advanced-plan
+    description: "Test advanced subnet deployment with AKS, App Service, and NetApp delegations"
+    command: |
+      cd examples/advanced
+      terraform init
+      terraform plan -out=tfplan
+
+# Spacelift stack defaults for modules using this
+stack_defaults:
+  runner_image: public.ecr.aws/spacelift/runner-terraform:latest
+  terraform_version: "1.9.0"
+
+# Auto-attach policies for stacks using this module
+policies:
+  plan:
+    - network-security
+    - subnet-delegation-validation
+
+# Notification settings
+notifications:
+  on_failure: true
+  on_success: false

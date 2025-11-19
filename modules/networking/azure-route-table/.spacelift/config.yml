@@ -1,0 +1,56 @@
+version: "1"
+
+# Module metadata
+module:
+  name: azure-route-table
+  description: "Azure Route Table module for hub-spoke networking and User-Defined Routes (UDR)"
+  provider: azurerm
+  category: networking
+
+# Automated tests
+tests:
+  - name: basic-validation
+    description: "Validate basic route table configuration"
+    command: |
+      cd examples/basic
+      terraform init
+      terraform validate
+      terraform fmt -check
+
+  - name: basic-plan
+    description: "Test basic route table with common routes"
+    command: |
+      cd examples/basic
+      terraform init
+      terraform plan -out=tfplan
+
+  - name: advanced-validation
+    description: "Validate advanced route table configurations"
+    command: |
+      cd examples/advanced
+      terraform init
+      terraform validate
+      terraform fmt -check
+
+  - name: advanced-plan
+    description: "Test advanced routing patterns (hub-spoke, forced tunneling, multi-region)"
+    command: |
+      cd examples/advanced
+      terraform init
+      terraform plan -out=tfplan
+
+# Spacelift stack defaults for modules using this
+stack_defaults:
+  runner_image: public.ecr.aws/spacelift/runner-terraform:latest
+  terraform_version: "1.9.0"
+
+# Auto-attach policies for stacks using this module
+policies:
+  plan:
+    - network-security
+    - routing-validation
+
+# Notification settings
+notifications:
+  on_failure: true
+  on_success: false
