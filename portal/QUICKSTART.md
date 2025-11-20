@@ -10,12 +10,23 @@ Get the Landing Zone Portal running in 5 minutes using Docker Compose.
 
 ## Quick Start
 
-### 1. Start all services
+### 1. Build and start all services
 
 From the `portal` directory:
 
+**IMPORTANT (especially on Windows):** Build the images first!
+
 ```bash
+# Build all images (required first time)
+docker-compose -f docker-compose.full.yml build
+
+# Start all services
 docker-compose -f docker-compose.full.yml up -d
+```
+
+**Or in one command:**
+```bash
+docker-compose -f docker-compose.full.yml up -d --build
 ```
 
 This will start:
