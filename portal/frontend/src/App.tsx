@@ -9,6 +9,8 @@ import LandingZoneDetail from './pages/LandingZoneDetail'
 import Approvals from './pages/Approvals'
 import Templates from './pages/Templates'
 import Costs from './pages/Costs'
+import DesignerProjects from './pages/DesignerProjects'
+import Designer from './pages/Designer'
 import { useAuth } from './contexts/AuthContext'
 
 function App() {
@@ -46,6 +48,8 @@ function App() {
         <Route path="/approvals" element={<Approvals />} />
         <Route path="/templates" element={<Templates />} />
         <Route path="/costs" element={<Costs />} />
+        <Route path="/designer/projects" element={<DesignerProjects />} />
+        <Route path="/designer/:id" element={<Designer />} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </Layout>

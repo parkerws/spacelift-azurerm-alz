@@ -25,6 +25,7 @@ import {
   LibraryBooks as TemplatesIcon,
   AttachMoney as CostsIcon,
   Add as AddIcon,
+  Draw as DesignerIcon,
 } from '@mui/icons-material'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -60,6 +61,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   const menuItems = [
     { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
+    { text: 'Visual Designer', icon: <DesignerIcon />, path: '/designer/projects' },
     { text: 'Landing Zones', icon: <CloudIcon />, path: '/landing-zones' },
     ...(isApprover
       ? [{ text: 'Approvals', icon: <ApprovalIcon />, path: '/approvals' }]
